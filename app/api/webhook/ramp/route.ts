@@ -122,7 +122,10 @@ export async function POST(req: Request) {
     }
 
     const lineItemDescs = bill.lineItems.map((li) => li.description);
-    const matches = findMatchesForBill(bill.vendor, lineItemDescs, podscaleRows);
+    // For a per-invoice Slack message, use only the single best match.
+    // Multi-match (Partnerlog → many shows) was causing noisy messages.
+    const allMatches = findMatchesForBill(bill.vendor, lineItemDescs, podscaleRows);
+    const matches = allMatches.slice(0, 1);
 
     const runDate = new Date().toLocaleDateString("en-US", {
       month: "short", day: "numeric", year: "numeric",
