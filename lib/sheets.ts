@@ -2,6 +2,8 @@
 // Spreadsheet: Jones Road Beauty Master 2026
 // Sheet gid: 1893391766 (master tab)
 //
+// Auth: Google API key (simpler than service account, works with "anyone with link" sharing)
+//
 // Column mapping (master tab):
 //   A  = Show/podcast name
 //   B  = Network/agency name
@@ -9,15 +11,12 @@
 //   R  = Aired date (populated = aired; blank = not yet aired)
 //   S  = Podscale approved flag ("TRUE" or blank)
 
-import { google } from "googleapis";
-
 const SPREADSHEET_ID =
   process.env.PODSCALE_SPREADSHEET_ID ??
   "1InhmO83-a7Z3U2GSGABE2AAnkoU77_fnI897J9d7sl4";
 
-// Read columns A through S from the first visible sheet.
-// We omit the sheet name prefix so it defaults to the first/active sheet.
-// The master tab gid is 1893391766 — if the tab name is ever needed, update SHEET_NAME.
+// gid 1893391766 = master tab. We use the numeric sheet ID in the range
+// to ensure we read the right tab regardless of its display name.
 const RANGE = "A:S";
 
 export interface PodscaleRow {
@@ -29,38 +28,20 @@ export interface PodscaleRow {
   podscaleApproved: boolean;    // Col S == "TRUE"
 }
 
-function getAuth() {
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
-  const projectId = process.env.GOOGLE_PROJECT_ID;
-  if (!clientEmail || !privateKey || !projectId) {
-    throw new Error("GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, or GOOGLE_PROJECT_ID is not set");
-  }
-  // Vercel may deliver \n as the literal two-char sequence — normalize to real newlines
-  const normalizedKey = privateKey.includes("\\n")
-    ? privateKey.replace(/\\n/g, "\n")
-    : privateKey;
-  return new google.auth.GoogleAuth({
-    credentials: {
-      type: "service_account",
-      project_id: projectId,
-      client_email: clientEmail,
-      private_key: normalizedKey,
-    },
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
-}
-
 export async function getPodscaleRows(): Promise<PodscaleRow[]> {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: "v4", auth });
+  const apiKey = process.env.GOOGLE_API_KEY;
+  if (!apiKey) throw new Error("GOOGLE_API_KEY is not set");
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: RANGE,
-  });
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${RANGE}?key=${apiKey}`;
+  const res = await fetch(url);
 
-  const rawRows = response.data.values ?? [];
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Sheets API error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json() as { values?: string[][] };
+  const rawRows = data.values ?? [];
   const results: PodscaleRow[] = [];
 
   // Row index 0 = header row, skip it
@@ -70,11 +51,11 @@ export async function getPodscaleRows(): Promise<PodscaleRow[]> {
     // Skip completely empty rows
     if (!showName) continue;
 
-    const network = (row[1] ?? "").trim();                     // Col B (index 1)
+    const network = (row[1] ?? "").trim();                            // Col B (index 1)
     const budgetRaw = (row[5] ?? "").toString().replace(/[$,]/g, ""); // Col F (index 5)
     const expectedSpend = budgetRaw ? parseFloat(budgetRaw) : null;
-    const airedDate = (row[17] ?? "").trim() || null;          // Col R (index 17)
-    const podscaleRaw = (row[18] ?? "").trim().toUpperCase();  // Col S (index 18)
+    const airedDate = (row[17] ?? "").trim() || null;                 // Col R (index 17)
+    const podscaleRaw = (row[18] ?? "").trim().toUpperCase();         // Col S (index 18)
     const podscaleApproved = podscaleRaw === "TRUE";
 
     results.push({
