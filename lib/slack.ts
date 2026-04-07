@@ -67,12 +67,30 @@ export async function postReconciliationSummary(
   }
 
   if (unmatched.length > 0) {
-    lines.push(`*❓ No spreadsheet match found (${unmatched.length})*`);
-    for (const r of unmatched) {
-      lines.push(`  • "${r.billVendor}" — ${formatDollars(r.billAmount)} — no matching row found`);
-      if (r.billInvoiceUrl) lines.push(`    ↳ 🔗 <${r.billInvoiceUrl}|View invoice>`);
+    // Only surface unmatched bills that look like they could be podcast-related.
+    // Bills from packaging companies, tech vendors, etc. are noise for Whitney.
+    const podcastKeywords = [
+      "podcast", "media", "network", "audio", "radio", "studio", "studios",
+      "entertainment", "productions", "cast", "stories", "sound",
+    ];
+    const podcastUnmatched = unmatched.filter((r) => {
+      const v = r.billVendor.toLowerCase();
+      return podcastKeywords.some((k) => v.includes(k));
+    });
+    const otherCount = unmatched.length - podcastUnmatched.length;
+
+    if (podcastUnmatched.length > 0) {
+      lines.push(`*❓ No spreadsheet match found (${podcastUnmatched.length})*`);
+      for (const r of podcastUnmatched) {
+        lines.push(`  • "${r.billVendor}" — ${formatDollars(r.billAmount)} — no matching row found`);
+        if (r.billInvoiceUrl) lines.push(`    ↳ 🔗 <${r.billInvoiceUrl}|View invoice>`);
+      }
+      lines.push("");
     }
-    lines.push("");
+    if (otherCount > 0) {
+      lines.push(`_${otherCount} non-podcast bill${otherCount !== 1 ? "s" : ""} excluded (not in Podscale sheet)_`);
+      lines.push("");
+    }
   }
 
   if (results.length === 0) {

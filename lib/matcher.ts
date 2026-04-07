@@ -20,7 +20,7 @@ const FUZZY_THRESHOLD = 0.4;
 const NETWORK_ALIASES: Record<string, string[]> = {
   "sxm": ["sirius xm"],
   "meidas touch": ["meidas media"],
-  "law & crime": ["lawnewz"],
+  "law & crime": ["lawnewz", "law crime"],
 };
 
 function normalize(s: string): string {
