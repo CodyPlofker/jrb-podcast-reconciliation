@@ -35,14 +35,16 @@ async function getAccessToken(): Promise<string> {
     throw new Error("RAMP_CLIENT_ID or RAMP_CLIENT_SECRET is not set");
   }
 
+  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
   const res = await fetch(RAMP_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${basicAuth}`,
+    },
     body: new URLSearchParams({
       grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: "bills:read",
+      scope: "bills:read vendors:read",
     }),
   });
 
