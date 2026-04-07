@@ -6,9 +6,30 @@ import { postSingleBillResult } from "@/lib/slack";
 
 const RAMP_API_BASE = "https://api.ramp.com/developer/v1";
 
-async function verifyWebhook(webhookId: string, challenge: string): Promise<void> {
+// Find the pending webhook for our own endpoint URL, then call /verify.
+// We look it up dynamically so we don't need RAMP_WEBHOOK_ID to match exactly.
+async function verifyWebhook(challenge: string): Promise<void> {
   const token = await getAccessTokenPublic();
-  const res = await fetch(`${RAMP_API_BASE}/webhooks/${webhookId}/verify`, {
+  const ourUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/webhook/ramp`
+    : "https://jrb-podcast-reconciliation.vercel.app/api/webhook/ramp";
+
+  // List all webhooks to find ours
+  const listRes = await fetch(`${RAMP_API_BASE}/webhooks`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const listData = await listRes.json() as Array<{ id: string; endpoint_url: string; status: string }>;
+  const pending = listData.find(
+    (w) => w.endpoint_url === ourUrl && w.status === "pending_verification"
+  );
+
+  if (!pending) {
+    console.warn("[webhook] no pending webhook found for our URL — already active or URL mismatch");
+    return;
+  }
+
+  console.log("[webhook] verifying webhook id:", pending.id);
+  const res = await fetch(`${RAMP_API_BASE}/webhooks/${pending.id}/verify`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ challenge }),
@@ -56,14 +77,9 @@ export async function POST(req: Request) {
   //   2. Call POST /webhooks/{id}/verify with the challenge to activate
   if (payload.challenge) {
     const challenge = payload.challenge as string;
-    const webhookId = process.env.RAMP_WEBHOOK_ID;
-    console.log("[webhook] challenge received, webhookId:", webhookId, "challenge:", challenge);
-    if (webhookId) {
-      // Must await — Vercel terminates function on response, killing async tasks
-      await verifyWebhook(webhookId, challenge);
-    } else {
-      console.warn("[webhook] RAMP_WEBHOOK_ID not set — cannot auto-verify");
-    }
+    console.log("[webhook] challenge received:", challenge);
+    // Must await — Vercel terminates function on response, killing async tasks
+    await verifyWebhook(challenge);
     return NextResponse.json({ challenge });
   }
   // Log full payload type for debugging
