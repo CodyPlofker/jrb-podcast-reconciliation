@@ -97,6 +97,15 @@ export async function getBillsForApproval(): Promise<RampBill[]> {
   return bills;
 }
 
+export async function getBillById(billId: string): Promise<RampBill | null> {
+  const res = await fetch(`${RAMP_API_BASE}/bills/${billId}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return normalizeBill(data);
+}
+
 export async function getBillInvoiceUrl(billId: string): Promise<string | null> {
   const res = await fetch(`${RAMP_API_BASE}/bills/${billId}/documents`, {
     headers: await authHeaders(),
