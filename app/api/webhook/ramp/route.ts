@@ -40,17 +40,6 @@ async function verifySignature(rawBody: string, signature: string | null, secret
 export async function POST(req: Request) {
   const rawBody = await req.text();
 
-  // Verify signature if secret is configured
-  const webhookSecret = process.env.RAMP_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const sig = req.headers.get("x-ramp-signature");
-    const valid = await verifySignature(rawBody, sig, webhookSecret);
-    if (!valid) {
-      console.error("[webhook] Invalid signature");
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-    }
-  }
-
   let payload: Record<string, unknown>;
   try {
     payload = JSON.parse(rawBody);
@@ -58,7 +47,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Handle Ramp's challenge handshake during webhook registration.
+  // Handle Ramp's challenge handshake BEFORE signature check.
+  // The challenge arrives immediately after registration, before we can store
+  // the new secret in our deployment — so we allow it through unsigned.
+  // Challenges are not security-sensitive (no business data involved).
   // Ramp sends { challenge: "..." } and expects us to:
   //   1. Return 2xx (so they know the endpoint is reachable)
   //   2. Call POST /webhooks/{id}/verify with the challenge to activate
@@ -74,6 +66,17 @@ export async function POST(req: Request) {
       console.warn("[webhook] RAMP_WEBHOOK_ID not set — cannot auto-verify");
     }
     return NextResponse.json({ challenge });
+  }
+
+  // Verify signature for all real events (not challenge handshakes)
+  const webhookSecret = process.env.RAMP_WEBHOOK_SECRET;
+  if (webhookSecret) {
+    const sig = req.headers.get("x-ramp-signature");
+    const valid = await verifySignature(rawBody, sig, webhookSecret);
+    if (!valid) {
+      console.error("[webhook] Invalid signature");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
   }
 
   const eventType = payload.type as string;
