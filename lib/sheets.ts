@@ -32,7 +32,9 @@ export interface PodscaleRow {
 function getAuth() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not set");
-  const creds = JSON.parse(raw);
+  // Vercel sometimes escapes newlines in env vars — unescape before parsing
+  const normalized = raw.replace(/\\n/g, "\n");
+  const creds = JSON.parse(normalized);
   return new google.auth.GoogleAuth({
     credentials: creds,
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
