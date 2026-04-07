@@ -15,6 +15,17 @@ export async function GET(req: Request) {
     }
   }
 
+  // ?diag=1 runs step-by-step with per-step errors for debugging
+  const diag = new URL(req.url).searchParams.get("diag") === "1";
+  if (diag) {
+    const { getBillsForApproval } = await import("@/lib/ramp");
+    const { getPodscaleRows } = await import("@/lib/sheets");
+    const steps: Record<string, unknown> = {};
+    try { const b = await getBillsForApproval(); steps.ramp = `ok — ${b.length} bills`; } catch (e) { steps.ramp = `ERROR: ${e instanceof Error ? e.message : e}`; }
+    try { const r = await getPodscaleRows(); steps.sheets = `ok — ${r.length} rows`; } catch (e) { steps.sheets = `ERROR: ${e instanceof Error ? e.message : e}`; }
+    return NextResponse.json({ diag: true, steps });
+  }
+
   try {
     const results = await runReconciliation();
     const runDate = new Date().toLocaleDateString("en-US", {
