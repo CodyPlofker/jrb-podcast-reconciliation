@@ -57,6 +57,7 @@ export async function POST(req: Request) {
   if (payload.challenge) {
     const challenge = payload.challenge as string;
     const webhookId = process.env.RAMP_WEBHOOK_ID;
+    console.log("[webhook] challenge received, webhookId:", webhookId, "challenge:", challenge);
     if (webhookId) {
       // Must await — Vercel terminates function on response, killing async tasks
       await verifyWebhook(webhookId, challenge);
@@ -65,6 +66,8 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ challenge });
   }
+  // Log full payload type for debugging
+  console.log("[webhook] event type:", payload.type, "keys:", Object.keys(payload).join(","));
 
   // Verify signature for all real events (not challenge handshakes)
   const webhookSecret = process.env.RAMP_WEBHOOK_SECRET;
