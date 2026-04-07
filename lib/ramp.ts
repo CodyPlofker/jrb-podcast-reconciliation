@@ -74,8 +74,9 @@ export async function getBillsForApproval(): Promise<RampBill[]> {
   let cursor: string | null = null;
 
   do {
-    const params = new URLSearchParams({ approval_status: "PENDING", limit: "50" });
-    if (cursor) params.set("page_cursor", cursor);
+    // Fetch all open bills — we filter for pending approval after normalization
+    const params = new URLSearchParams({ payment_status: "OPEN", limit: "50" });
+    if (cursor) params.set("start", cursor);
 
     const res = await fetch(`${RAMP_API_BASE}/bills?${params}`, {
       headers: await authHeaders(),
@@ -106,21 +107,22 @@ export async function getBillInvoiceUrl(billId: string): Promise<string | null> 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeBill(raw: any): RampBill {
-  const totalCents: number = raw.amount ?? raw.total_amount ?? 0;
+  // Ramp REST API returns amounts in dollars (not cents)
+  const totalAmount: number = raw.amount ?? raw.total_amount ?? 0;
   return {
     id: raw.id,
-    vendor: raw.vendor?.name ?? raw.memo ?? "Unknown Vendor",
+    vendor: raw.vendor_name ?? raw.vendor?.name ?? raw.memo ?? "Unknown Vendor",
     invoiceNumber: raw.invoice_number ?? null,
-    invoiceDate: raw.invoice_date ?? raw.created_at ?? null,
-    totalAmount: totalCents / 100,
+    invoiceDate: raw.invoice_date ?? raw.due_date ?? raw.created_at ?? null,
+    totalAmount,
     lineItems: (raw.line_items ?? []).map(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (li: any): RampLineItem => ({
-        description: li.memo ?? li.description ?? "",
-        amount: (li.amount ?? 0) / 100,
+        description: li.memo ?? li.description ?? li.category ?? "",
+        amount: li.amount ?? 0,
       })
     ),
-    approvalStatus: raw.approval_status ?? "UNKNOWN",
+    approvalStatus: raw.approval_status ?? raw.payment_status ?? "UNKNOWN",
     invoiceUrl: null,
   };
 }
