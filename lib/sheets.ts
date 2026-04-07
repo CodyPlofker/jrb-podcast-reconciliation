@@ -32,8 +32,9 @@ export interface PodscaleRow {
 function getAuth() {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not set");
-  // Stored as base64 to avoid Vercel mangling \n sequences in the private key
-  const decoded = Buffer.from(raw.trim(), "base64").toString("utf-8");
+  // Stored as base64 to avoid Vercel mangling \n sequences in the private key.
+  // Strip all whitespace first — macOS base64 wraps at 76 chars.
+  const decoded = Buffer.from(raw.replace(/\s/g, ""), "base64").toString("utf-8");
   const creds = JSON.parse(decoded);
   return new google.auth.GoogleAuth({
     credentials: creds,
