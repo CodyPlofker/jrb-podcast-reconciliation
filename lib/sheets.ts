@@ -30,14 +30,23 @@ export interface PodscaleRow {
 }
 
 function getAuth() {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not set");
-  // Stored as base64 to avoid Vercel mangling \n sequences in the private key.
-  // Strip all whitespace first — macOS base64 wraps at 76 chars.
-  const decoded = Buffer.from(raw.replace(/\s/g, ""), "base64").toString("utf-8");
-  const creds = JSON.parse(decoded);
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  const projectId = process.env.GOOGLE_PROJECT_ID;
+  if (!clientEmail || !privateKey || !projectId) {
+    throw new Error("GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, or GOOGLE_PROJECT_ID is not set");
+  }
+  // Vercel may deliver \n as the literal two-char sequence — normalize to real newlines
+  const normalizedKey = privateKey.includes("\\n")
+    ? privateKey.replace(/\\n/g, "\n")
+    : privateKey;
   return new google.auth.GoogleAuth({
-    credentials: creds,
+    credentials: {
+      type: "service_account",
+      project_id: projectId,
+      client_email: clientEmail,
+      private_key: normalizedKey,
+    },
     scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
   });
 }
