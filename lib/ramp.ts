@@ -107,9 +107,20 @@ export async function getBillInvoiceUrl(billId: string): Promise<string | null> 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseAmount(val: unknown): number {
+  if (typeof val === "number") return val;
+  if (val && typeof val === "object") {
+    const obj = val as Record<string, number>;
+    const raw = obj.amount ?? 0;
+    const rate = obj.minor_unit_conversion_rate ?? 1;
+    return raw / rate;
+  }
+  return 0;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeBill(raw: any): RampBill {
-  // Ramp REST API returns amounts in dollars (not cents)
-  const totalAmount: number = raw.amount ?? raw.total_amount ?? 0;
+  const totalAmount = parseAmount(raw.amount ?? raw.total_amount);
   return {
     id: raw.id,
     vendor: raw.vendor_name ?? raw.vendor?.name ?? raw.memo ?? "Unknown Vendor",
@@ -120,7 +131,7 @@ function normalizeBill(raw: any): RampBill {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (li: any): RampLineItem => ({
         description: li.memo ?? li.description ?? li.category ?? "",
-        amount: li.amount ?? 0,
+        amount: parseAmount(li.amount),
       })
     ),
     approvalStatus: raw.approval_status ?? raw.payment_status ?? "UNKNOWN",

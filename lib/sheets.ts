@@ -17,7 +17,7 @@ const SPREADSHEET_ID =
 
 // gid 1893391766 = master tab. We use the numeric sheet ID in the range
 // to ensure we read the right tab regardless of its display name.
-const RANGE = "A:S";
+const RANGE = "Master!A:S";
 
 export interface PodscaleRow {
   rowNumber: number; // 1-indexed (matches sheet row)
