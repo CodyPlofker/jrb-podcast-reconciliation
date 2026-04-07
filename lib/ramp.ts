@@ -74,8 +74,7 @@ export async function getBillsForApproval(): Promise<RampBill[]> {
   let cursor: string | null = null;
 
   do {
-    // Fetch all open bills — we filter for pending approval after normalization
-    const params = new URLSearchParams({ payment_status: "OPEN", limit: "50" });
+    const params = new URLSearchParams({ approval_status: "PENDING", limit: "50" });
     if (cursor) params.set("start", cursor);
 
     const res = await fetch(`${RAMP_API_BASE}/bills?${params}`, {
@@ -90,7 +89,9 @@ export async function getBillsForApproval(): Promise<RampBill[]> {
     const data = await res.json();
     const page: RampBill[] = (data.data ?? []).map(normalizeBill);
     bills.push(...page);
-    cursor = data.page?.next ?? null;
+    // Extract start cursor from next URL e.g. "...?start=xxx"
+    const nextUrl = data.page?.next ?? null;
+    cursor = nextUrl ? new URL(nextUrl).searchParams.get("start") : null;
   } while (cursor);
 
   return bills;
