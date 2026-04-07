@@ -15,10 +15,10 @@ const SPREADSHEET_ID =
   process.env.PODSCALE_SPREADSHEET_ID ??
   "1InhmO83-a7Z3U2GSGABE2AAnkoU77_fnI897J9d7sl4";
 
-// The master tab is the first sheet; we read by name to be safe
-const SHEET_NAME = "Master";
-// Read columns A through S (adjust end column if sheet grows)
-const RANGE = `${SHEET_NAME}!A:S`;
+// Read columns A through S from the first visible sheet.
+// We omit the sheet name prefix so it defaults to the first/active sheet.
+// The master tab gid is 1893391766 — if the tab name is ever needed, update SHEET_NAME.
+const RANGE = "A:S";
 
 export interface PodscaleRow {
   rowNumber: number; // 1-indexed (matches sheet row)
