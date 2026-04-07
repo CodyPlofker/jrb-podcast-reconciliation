@@ -58,10 +58,8 @@ export async function POST(req: Request) {
     const challenge = payload.challenge as string;
     const webhookId = process.env.RAMP_WEBHOOK_ID;
     if (webhookId) {
-      // Fire-and-forget — don't block the 2xx response
-      verifyWebhook(webhookId, challenge).catch((e) =>
-        console.error("[webhook] verify error:", e)
-      );
+      // Must await — Vercel terminates function on response, killing async tasks
+      await verifyWebhook(webhookId, challenge);
     } else {
       console.warn("[webhook] RAMP_WEBHOOK_ID not set — cannot auto-verify");
     }
