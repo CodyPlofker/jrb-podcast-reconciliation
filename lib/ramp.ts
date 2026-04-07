@@ -1,11 +1,12 @@
-// Ramp REST API client
+// Ramp REST API client — OAuth 2.0 client credentials flow
 // Docs: https://docs.ramp.com/developer-api/v1
 
 const RAMP_API_BASE = "https://api.ramp.com/developer/v1";
+const RAMP_TOKEN_URL = "https://api.ramp.com/developer/v1/token";
 
 export interface RampLineItem {
   description: string;
-  amount: number; // in cents
+  amount: number; // in dollars
 }
 
 export interface RampBill {
@@ -19,11 +20,49 @@ export interface RampBill {
   invoiceUrl: string | null;
 }
 
-function getHeaders() {
-  const apiKey = process.env.RAMP_API_KEY;
-  if (!apiKey) throw new Error("RAMP_API_KEY is not set");
+// Simple in-memory token cache (valid for duration of one function invocation)
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+async function getAccessToken(): Promise<string> {
+  const now = Date.now();
+  if (cachedToken && cachedToken.expiresAt > now + 30_000) {
+    return cachedToken.token;
+  }
+
+  const clientId = process.env.RAMP_CLIENT_ID;
+  const clientSecret = process.env.RAMP_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error("RAMP_CLIENT_ID or RAMP_CLIENT_SECRET is not set");
+  }
+
+  const res = await fetch(RAMP_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: "bills:read",
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Ramp token error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: now + (data.expires_in ?? 3600) * 1000,
+  };
+  return cachedToken.token;
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAccessToken();
   return {
-    Authorization: `Bearer ${apiKey}`,
+    Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 }
@@ -37,7 +76,7 @@ export async function getBillsForApproval(): Promise<RampBill[]> {
     if (cursor) params.set("page_cursor", cursor);
 
     const res = await fetch(`${RAMP_API_BASE}/bills?${params}`, {
-      headers: getHeaders(),
+      headers: await authHeaders(),
     });
 
     if (!res.ok) {
@@ -56,7 +95,7 @@ export async function getBillsForApproval(): Promise<RampBill[]> {
 
 export async function getBillInvoiceUrl(billId: string): Promise<string | null> {
   const res = await fetch(`${RAMP_API_BASE}/bills/${billId}/documents`, {
-    headers: getHeaders(),
+    headers: await authHeaders(),
   });
   if (!res.ok) return null;
   const data = await res.json();
