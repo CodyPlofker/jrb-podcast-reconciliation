@@ -23,6 +23,10 @@ export interface RampBill {
 // Simple in-memory token cache (valid for duration of one function invocation)
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+export async function getAccessTokenPublic(): Promise<string> {
+  return getAccessToken();
+}
+
 async function getAccessToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && cachedToken.expiresAt > now + 30_000) {

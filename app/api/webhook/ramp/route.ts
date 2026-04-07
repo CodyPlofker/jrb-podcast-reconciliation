@@ -1,8 +1,21 @@
 import { NextResponse } from "next/server";
-import { getBillById } from "@/lib/ramp";
+import { getBillById, getAccessTokenPublic } from "@/lib/ramp";
 import { getPodscaleRows } from "@/lib/sheets";
 import { findMatchesForBill } from "@/lib/matcher";
 import { postSingleBillResult } from "@/lib/slack";
+
+const RAMP_API_BASE = "https://api.ramp.com/developer/v1";
+
+async function verifyWebhook(webhookId: string, challenge: string): Promise<void> {
+  const token = await getAccessTokenPublic();
+  const res = await fetch(`${RAMP_API_BASE}/webhooks/${webhookId}/verify`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge }),
+  });
+  const data = await res.json();
+  console.log("[webhook] verify result:", res.status, JSON.stringify(data));
+}
 
 export const maxDuration = 60;
 
@@ -45,9 +58,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  // Handle Ramp's challenge handshake during webhook registration
+  // Handle Ramp's challenge handshake during webhook registration.
+  // Ramp sends { challenge: "..." } and expects us to:
+  //   1. Return 2xx (so they know the endpoint is reachable)
+  //   2. Call POST /webhooks/{id}/verify with the challenge to activate
   if (payload.challenge) {
-    return NextResponse.json({ challenge: payload.challenge });
+    const challenge = payload.challenge as string;
+    const webhookId = process.env.RAMP_WEBHOOK_ID;
+    if (webhookId) {
+      // Fire-and-forget — don't block the 2xx response
+      verifyWebhook(webhookId, challenge).catch((e) =>
+        console.error("[webhook] verify error:", e)
+      );
+    } else {
+      console.warn("[webhook] RAMP_WEBHOOK_ID not set — cannot auto-verify");
+    }
+    return NextResponse.json({ challenge });
   }
 
   const eventType = payload.type as string;
